@@ -1,0 +1,56 @@
+This project is meant to translate tuple deformation algorithm into IR of OMR-Jit and observe, compare the speedups and efficiency.
+
+What is tuple deformation?
+
+In broader view, if we have a query:
+select * from table; 
+so tuple deformation is the "from table" part of the above query.
+Postgresql has something called "shared-memory" where all the tables loaded on which different postgresql processes(actually threads) are operating (transactions etc.). Now for a postgres to perform all it's operations it needs data and the data is brought from the disk(compactly stored data) into some readable from in a huge memory called "shared memory" and by this way postgresql is able to achieve speedups in query execution and different processes concurrently read or update the data from the shared memory. So tuple deformation algorithm plays the role of loading this data into the "shared memory" of postgresql.
+
+How is omrjit integreted with postgresql?
+
+Well! Currently omrjit is hardly coupled with postgres and here is how.
+   i. There is a function called "exec_simple_query" which is invoked everytime to run a query and
+      is the 1st entry point in the backend.
+      It is present in "/src/backend/tcop/postgres.c) line: 1007
+
+   ii. As the execution of this function begins we starting compiling the jit-code line: 1031
+   iii.Once all the subsequent stages are complete i.e lexing/parsing, optimization and execution
+      we then shutdown() the jit at the end of this function
+
+   iv. Declaration of ll the function pointers which would have the entry point to the compiled 
+      code is present int the file "/src/include/omrjit.h". Note that: at this point all the
+      function pointers are global variables so that they can be accessed from any function(ease of
+      testing). This file also has a field called omrjit_path which is initlialized with the path 
+      to the omrjit_expr.so file present in the postgres lib dir. By that it becomes easy to load
+      .so library can call any function the library use function pointers.
+
+   v. "slot_deform" is the function pointer which can invoke the compiled code's entry point,
+      essentially calling the buildIl() method. 
+      slot_deform would take 4 args: no. of cols/attrs in a row, slot in shared memory, the tuple,
+      pointer till the last column was fetched,  
+
+   vi. There is a function called "tts_buffer_heap_getsomeattrs" in the file: 
+       "src/backend/executor/execTuples.c" which calls a c-function "slot_deform_tuple" - which is
+       the actual function to do all of tuple-deformation work.
+   vii. So instead of calling c-function we now called the slot_deform which is invoking the 
+       compiled omrjit code.
+   
+   viii. The jit code is present in: "contrib/omrjit_expr/omrjit_expr.cpp" file. The class called
+       "slot_compile_deform" has all the members defined in it responsible for deformation.
+
+   ix. Note that any c-function must be included in a extern c{} block in the .cpp files, to comply
+      with postgresql coding standards.
+
+
+
+
+
+
+
+
+
+
+
+
+

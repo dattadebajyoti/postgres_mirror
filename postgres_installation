@@ -1,0 +1,65 @@
+1. Installing postgresql and building with eclipse:
+
+    mkdir project
+    cd project
+    git clone git://git.postgresql.org/git/postgresql.git
+    mv postgresql pgsql
+    cd pgsql
+
+  1-way to configure:
+    If u want to incorporate llvm with postgres run:
+    ./configure --with-llvm LLVM_CONFIG='/path-tollvm-project/llvm-project/build/bin/llvm- config' --prefix=$HOME/project --enable-depend --enable-cassert --enable-debug --without-readline --without-zlib
+
+  
+
+  The other-way:
+    Else run:
+    ./configure  --prefix=$HOME/project --enable-depend --enable-cassert --enable-debug --without-readline --without-zlib
+
+2. Download c/c++ eclipse
+
+3. Use this link: https://wiki.postgresql.org/wiki/Working_with_Eclipse
+    Use it only for importing the postgresql project into eclipse untill the installation.
+
+4. In the terminal launch initdb using the following command:
+     export PATH=$HOME/project/bin:$PATH
+     export PGDATA=DemoDir
+     initdb
+
+5. Now u need to generate the omrjit_expr.so file. For this do the following:
+   i. Goto the file: 'src/Makefile.global' in line number 256, make "CC=g++"
+   ii. Build the code again in eclipse using Build Targets
+   iii.In the terminal goto: project/pgsql/contrib/omrjit_expr and run the following commands:
+      a. make
+      b. cp omrjit_expr.so /usr/local/pgsql/lib
+
+ALL DONE BUT ATLEAST WE WOULD NEED THE DATA, SO LET'S DOWNLOAD THE DATA FIRST
+
+6.  Now download the table for 10million rows in .csv format using following:
+    1. Goto the link: http://bigdata.cs.unb.ca/projects/sanzu/
+    2. Click download here
+    3. Extract the zip file, goto DataScienceBenmark folder and then to  Genfiles.
+    4. And in this dir, run the command: python gen_data1.py 10000000
+
+
+7. To connect to postgresql process to start the server and create a new db use:
+    start the server:  pg_ctl -D DemoDir start
+
+    Create a database called DemoDB: psql DemoDB
+    Once connected to te database, you can run queries like the one I wrote for 10Million rows:
+  
+
+    Create the table and run the query:
+    create table data1_10000000(time timestamp, city varchar(40), words varchar(40), rand1 int, rand2 float, nor float, uni float, exp float);
+    COPY data1_10000000(time, city, words, rand1, rand2, nor, uni, exp) from '/home/path/to/data1_10000000.csv' DELIMITER ',' CSV HEADER;
+    select * from data1_10000000 where rand1>=750000;
+
+    stop the server:  pg_ctl -D DemoDir stop
+
+
+8. For debugging use please follow this link: https://www.highgo.ca/2020/01/10/how-to-build-and-debug-postgresql-12-using-latest-eclipse-ide-on-ubuntu-18-04/
+   Only start following from point no. 10 in this link
+
+
+
+
