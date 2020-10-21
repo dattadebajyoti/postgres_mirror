@@ -8,6 +8,8 @@ I used.
    to g++ .
 2. Refer, the postgres_installation document for more into installing, building with eclipse, creating a 10Million row table and testing your queries.
 
+Code for tuple deformation is present at: "pgsql/contrib/omrjit_expr"
+
 NOTE: implement point 1-4 only if you are not cloning the postres source from my git repo
 1. Place the "omrjit_expr" dir under the contrib directory: "../pgsql/contrib"
 2. Replace the file "execTuples.c" from "pgsql/src/backend/executor" with the one in the git.
