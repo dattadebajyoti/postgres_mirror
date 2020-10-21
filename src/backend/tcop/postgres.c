@@ -81,6 +81,30 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
+#include "jit/omrjit.h"
+
+/*Set the omrjit_loader to be false*/
+//omr_provider_successfully_loaded = false;
+
+//char	omrjit_path[MAXPGPATH];
+extern bool
+provider_init(void)
+{
+	if(omr_provider_successfully_loaded == true)
+	{
+		return true;
+	}
+	snprintf(omrjit_path, MAXPGPATH, "%s/%s%s", "/usr/local/pgsql/lib", "omrjit_expr", ".so");
+
+	/*omreval_compile = (omr_eval_compile)load_external_function(omrjit_path, "omr_predicate_eval_compile", true, NULL);
+	omreval_compile();
+
+	omreval_exec = (omr_eval_exec)load_external_function(omrjit_path, "run", true, NULL);*/
+
+	omr_provider_successfully_loaded = true;
+	return true;
+}
+
 /* ----------------
  *		global variables
  * ----------------
@@ -1000,6 +1024,24 @@ exec_simple_query(const char *query_string)
 
 	TRACE_POSTGRESQL_QUERY_START(query_string);
 
+	//Load omrjit
+	omr_provider_successfully_loaded = false;
+	provider_init();
+
+	//Initialize OMR
+	//elog(INFO, "Step 1: initialize JIT\n");
+	omreval_init = (omr_eval_initialize)load_external_function(omrjit_path, "omr_init", true, NULL);
+	bool initialized = omreval_init();
+    if (!initialized)
+       {
+       elog(INFO, "FAIL: could not initialize JIT\n");
+       exit(-1);
+       }
+
+	//omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
+	//omreval_shut();
+    omreval_compile = (omr_eval_compile)load_external_function(omrjit_path, "omr_compile", true, NULL);
+    omreval_compile();
 	/*
 	 * We use save_log_statement_stats so ShowUsage doesn't report incorrect
 	 * results because ResetUsage wasn't called.
@@ -1338,6 +1380,11 @@ exec_simple_query(const char *query_string)
 	TRACE_POSTGRESQL_QUERY_DONE(query_string);
 
 	debug_query_string = NULL;
+
+	//shutdown OMR
+	//elog(INFO, "Step 5: shutdown JIT\n");
+	omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
+	omreval_shut();
 }
 
 /*
@@ -3820,8 +3867,7 @@ PostgresMain(int argc, char *argv[],
 	}
 
 	/*
-	 * Set up signal handlers.  (InitPostmasterChild or InitStandaloneProcess
-	 * has already set up BlockSig and made that the active signal mask.)
+	 * Set up signal handlers and masks.
 	 *
 	 * Note that postmaster blocked all signals before forking child process,
 	 * so there is no race condition whereby we might receive a signal before
@@ -3843,9 +3889,6 @@ PostgresMain(int argc, char *argv[],
 		pqsignal(SIGTERM, die); /* cancel current query and exit */
 
 		/*
-		 * In a postmaster child backend, replace SignalHandlerForCrashExit
-		 * with quickdie, so we can tell the client we're dying.
-		 *
 		 * In a standalone backend, SIGQUIT can be generated from the keyboard
 		 * easily, while SIGTERM cannot, so we make both signals do die()
 		 * rather than quickdie().
@@ -3874,6 +3917,16 @@ PostgresMain(int argc, char *argv[],
 		pqsignal(SIGCHLD, SIG_DFL); /* system() requires this on some
 									 * platforms */
 	}
+
+	pqinitmask();
+
+	if (IsUnderPostmaster)
+	{
+		/* We allow SIGQUIT (quickdie) at all times */
+		sigdelset(&BlockSig, SIGQUIT);
+	}
+
+	PG_SETMASK(&BlockSig);		/* block everything except SIGQUIT */
 
 	if (!IsUnderPostmaster)
 	{
@@ -4144,6 +4197,25 @@ PostgresMain(int argc, char *argv[],
 
 	if (!ignore_till_sync)
 		send_ready_for_query = true;	/* initially, or after error */
+
+	//initialize omr
+	/*omr_provider_successfully_loaded = false;
+	provider_init();
+
+	//Initialize OMR
+	//elog(INFO, "Step 1: initialize JIT\n");
+	omreval_init = (omr_eval_initialize)load_external_function(omrjit_path, "omr_init", true, NULL);
+	bool initialized = omreval_init();
+    if (!initialized)
+       {
+       elog(INFO, "FAIL: could not initialize JIT\n");
+       exit(-1);
+       }
+
+	//omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
+	//omreval_shut();
+    omreval_compile = (omr_eval_compile)load_external_function(omrjit_path, "omr_compile", true, NULL);
+    omreval_compile();*/
 
 	/*
 	 * Non-error queries loop here.
@@ -4534,6 +4606,10 @@ PostgresMain(int argc, char *argv[],
 								firstchar)));
 		}
 	}							/* end of input-reading loop */
+	//shutdown OMR
+	//elog(INFO, "Step 5: shutdown JIT\n");
+	/*omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
+	omreval_shut();*/
 }
 
 /*
