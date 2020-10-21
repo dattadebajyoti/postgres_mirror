@@ -2,7 +2,12 @@
 
     mkdir project
     cd project
+    
+    /* use my code repo directly so that the changes can be directly found there and no need to change anything */
+    git clone https://github.com/dattadebajyoti/postgres_mirror.git
+    /* else if u want to get the original repo */
     git clone git://git.postgresql.org/git/postgresql.git
+    
     mv postgresql pgsql
     cd pgsql
 
