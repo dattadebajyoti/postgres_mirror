@@ -326,7 +326,22 @@ tts_heap_getsomeattrs(TupleTableSlot *slot, int natts)
 
 	Assert(!TTS_EMPTY(slot));
 
-	slot_deform_heap_tuple(slot, hslot->tuple, &hslot->off, natts);
+	//slot_deform_heap_tuple(slot, hslot->tuple, &hslot->off, natts);
+
+	/*if(is_compiled == false){
+
+		//slot_opt = slot;
+		//natts_opt = natts;
+		//attnum_opt = slot->tts_nvalid;
+		//natts_opt = natts;
+		//desc_opt = slot->tts_tupleDescriptor;
+		//tuple_opt = bslot->base.tuple;
+
+		omreval_compile = (omr_eval_compile *)load_external_function(omrjit_path, "omr_compile", true, NULL);
+		slot_deform = (*omreval_compile)();
+		is_compiled = true;
+	}*/
+	(*slot_deform)(natts, slot, hslot->tuple, &hslot->off);
 }
 
 static Datum
@@ -492,7 +507,22 @@ tts_minimal_getsomeattrs(TupleTableSlot *slot, int natts)
 
 	Assert(!TTS_EMPTY(slot));
 
-	slot_deform_heap_tuple(slot, mslot->tuple, &mslot->off, natts);
+	//slot_deform_heap_tuple(slot, mslot->tuple, &mslot->off, natts);
+
+	/*if(is_compiled == false){
+
+		//slot_opt = slot;
+		//natts_opt = natts;
+		//attnum_opt = slot->tts_nvalid;
+		//natts_opt = natts;
+		//desc_opt = slot->tts_tupleDescriptor;
+		//tuple_opt = bslot->base.tuple;
+
+		omreval_compile = (omr_eval_compile *)load_external_function(omrjit_path, "omr_compile", true, NULL);
+		slot_deform = (*omreval_compile)();
+		is_compiled = true;
+	}*/
+	(*slot_deform)(natts, slot, mslot->tuple, &mslot->off);
 }
 
 static Datum
@@ -686,7 +716,35 @@ tts_buffer_heap_getsomeattrs(TupleTableSlot *slot, int natts)
 	/*snprintf(omrjit_fetch_path, MAXPGPATH, "%s/%s%s", "/usr/local/pgsql/lib", "omrjit_expr", ".so");
 	omr_fetch_attributes_init = (omrjit_fetch)load_external_function(omrjit_fetch_path, "omr_tuple_deform", true, NULL);
 	omr_fetch_attributes_init(natts, slot, bslot->base.tuple, &bslot->base.off);*/
-	slot_deform(natts, slot, bslot->base.tuple, &bslot->base.off);
+
+	//slot_opt = slot;
+	//tuple_opt = bslot->base.tuple;
+	//off_opt = &bslot->base.off;
+	//natts_opt = natts;
+	//attnum = slot->tts_nvalid;
+
+
+	/*slot_opt = slot;
+	natts_opt = natts;
+	attnum_opt = slot->tts_nvalid;
+	natts_opt = natts;
+	desc_opt = slot->tts_tupleDescriptor;
+	tuple_opt = bslot->base.tuple;*/
+	//check if it was already compiled, if not compile
+	/*if(is_compiled == false){
+
+		//slot_opt = slot;
+		//natts_opt = natts;
+		//attnum_opt = slot->tts_nvalid;
+		//natts_opt = natts;
+		//desc_opt = slot->tts_tupleDescriptor;
+		//tuple_opt = bslot->base.tuple;
+
+		omreval_compile = (omr_eval_compile *)load_external_function(omrjit_path, "omr_compile", true, NULL);
+		slot_deform = (*omreval_compile)();
+		is_compiled = true;
+	}*/
+	(*slot_deform)(natts, slot, bslot->base.tuple, &bslot->base.off);
 }
 
 static Datum
@@ -1110,6 +1168,7 @@ MakeTupleTableSlot(TupleDesc tupleDesc,
 {
 	Size		basesz,
 				allocsz;
+
 	TupleTableSlot *slot;
 
 	basesz = tts_ops->base_slot_size;
@@ -1897,24 +1956,27 @@ slot_getmissingattrs(TupleTableSlot *slot, int startAttNum, int lastAttNum)
 void
 slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
 {
-	/* Check for caller errors */
-	Assert(slot->tts_nvalid < attnum);	/* checked in slot_getsomeattrs */
-	Assert(attnum > 0);
+	if (slot->tts_nvalid < attnum){
+		/* Check for caller errors */
+		Assert(slot->tts_nvalid < attnum);	/* checked in slot_getsomeattrs */
+		Assert(attnum > 0);
 
-	if (unlikely(attnum > slot->tts_tupleDescriptor->natts))
-		elog(ERROR, "invalid attribute number %d", attnum);
+		if (unlikely(attnum > slot->tts_tupleDescriptor->natts))
+			elog(ERROR, "invalid attribute number %d", attnum);
 
-	/* Fetch as many attributes as possible from the underlying tuple. */
-	slot->tts_ops->getsomeattrs(slot, attnum);
+		/* Fetch as many attributes as possible from the underlying tuple. */
+		slot->tts_ops->getsomeattrs(slot, attnum);
 
-	/*
-	 * If the underlying tuple doesn't have enough attributes, tuple
-	 * descriptor must have the missing attributes.
-	 */
-	if (unlikely(slot->tts_nvalid < attnum))
-	{
-		slot_getmissingattrs(slot, slot->tts_nvalid, attnum);
-		slot->tts_nvalid = attnum;
+
+		/*
+		 * If the underlying tuple doesn't have enough attributes, tuple
+		 * descriptor must have the missing attributes.
+		 */
+		if (unlikely(slot->tts_nvalid < attnum))
+		{
+			slot_getmissingattrs(slot, slot->tts_nvalid, attnum);
+			slot->tts_nvalid = attnum;
+		}
 	}
 }
 
