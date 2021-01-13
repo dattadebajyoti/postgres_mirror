@@ -82,11 +82,9 @@
 #include "utils/timestamp.h"
 
 #include "jit/omrjit.h"
+#include "jit/omr_operator.h"
 
-/*Set the omrjit_loader to be false*/
-//omr_provider_successfully_loaded = false;
 
-//char	omrjit_path[MAXPGPATH];
 extern bool
 provider_init(void)
 {
@@ -95,11 +93,6 @@ provider_init(void)
 		return true;
 	}
 	snprintf(omrjit_path, MAXPGPATH, "%s/%s%s", "/usr/local/pgsql/lib", "omrjit_expr", ".so");
-
-	/*omreval_compile = (omr_eval_compile)load_external_function(omrjit_path, "omr_predicate_eval_compile", true, NULL);
-	omreval_compile();
-
-	omreval_exec = (omr_eval_exec)load_external_function(omrjit_path, "run", true, NULL);*/
 
 	omr_provider_successfully_loaded = true;
 	return true;
@@ -1025,23 +1018,41 @@ exec_simple_query(const char *query_string)
 	TRACE_POSTGRESQL_QUERY_START(query_string);
 
 	//Load omrjit
-	omr_provider_successfully_loaded = false;
+
+	/*omr_provider_successfully_loaded = false;
 	provider_init();
 
-	//Initialize OMR
-	//elog(INFO, "Step 1: initialize JIT\n");
-	omreval_init = (omr_eval_initialize)load_external_function(omrjit_path, "omr_init", true, NULL);
+    omreval_init = (omr_eval_initialize)load_external_function(omrjit_path, "omr_init", true, NULL);
 	bool initialized = omreval_init();
-    if (!initialized)
-       {
-       elog(INFO, "FAIL: could not initialize JIT\n");
-       exit(-1);
-       }
+	if (!initialized)
+	{
+	   elog(INFO, "FAIL: could not initialize JIT\n");
+	   exit(-1);
+	}
 
-	//omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
-	//omreval_shut();
-    omreval_compile = (omr_eval_compile)load_external_function(omrjit_path, "omr_compile", true, NULL);
-    omreval_compile();
+	//omreval_compile = (omr_eval_compile)load_external_function(omrjit_path, "omr_compile", true, NULL);
+	is_compiled = false;
+	guaranteed_column_number = -1;
+    //Expression Compilation
+	if(is_compiled == false){
+		omreval_compile = (omr_eval_compile *)load_external_function(omrjit_path, "omr_compile", true, NULL);
+		slot_deform = (*omreval_compile)();
+		is_compiled = true;
+	}
+
+	expr_funcexprstrict_compile = (omr_expr_FUNCEXPR_STRICT_compile *)load_external_function(omrjit_path, "EEOP_FUNCEXPR_STRICT_compile_func", true, NULL);
+	FUNCEXPR_STRICT = (*expr_funcexprstrict_compile)();
+
+
+	expr_qual_compile = (omr_expr_qual_compile *)load_external_function(omrjit_path, "EEOP_Qual_compile_func", true, NULL);
+	qual_FunctionType = (*expr_qual_compile)();*/
+
+	/*expr_var_compile = (omr_EEOP_var_compile *)load_external_function(omrjit_path, "EEOP_VAR_compile_func", true, NULL);
+	VAR_FunctionType = (*expr_var_compile)();*/
+
+	/*expr_ASSIGN_var_compile = (omr_EEOP_ASSIGN_var_compile *)load_external_function(omrjit_path, "EEOP_ASSIGN_VAR_compile_func", true, NULL);
+	ASSIGN_VAR_FunctionType = (*expr_ASSIGN_var_compile)();*/
+
 	/*
 	 * We use save_log_statement_stats so ShowUsage doesn't report incorrect
 	 * results because ResetUsage wasn't called.
@@ -1382,9 +1393,8 @@ exec_simple_query(const char *query_string)
 	debug_query_string = NULL;
 
 	//shutdown OMR
-	//elog(INFO, "Step 5: shutdown JIT\n");
-	omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
-	omreval_shut();
+	/*omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
+	omreval_shut();*/
 }
 
 /*
@@ -4198,28 +4208,52 @@ PostgresMain(int argc, char *argv[],
 	if (!ignore_till_sync)
 		send_ready_for_query = true;	/* initially, or after error */
 
-	//initialize omr
-	/*omr_provider_successfully_loaded = false;
+	//Load omrjit
+
+	omr_provider_successfully_loaded = false;
 	provider_init();
 
-	//Initialize OMR
-	//elog(INFO, "Step 1: initialize JIT\n");
-	omreval_init = (omr_eval_initialize)load_external_function(omrjit_path, "omr_init", true, NULL);
-	bool initialized = omreval_init();
-    if (!initialized)
-       {
-       elog(INFO, "FAIL: could not initialize JIT\n");
-       exit(-1);
-       }
+    omreval_init = (omr_eval_initialize)load_external_function(omrjit_path, "omr_init", true, NULL);
+	/*bool initialized = */omreval_init();
+	/*if (!initialized)
+	{
+	   elog(INFO, "FAIL: could not initialize JIT\n");
+	   exit(-1);
+	}*/
 
-	//omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
-	//omreval_shut();
-    omreval_compile = (omr_eval_compile)load_external_function(omrjit_path, "omr_compile", true, NULL);
-    omreval_compile();*/
+	/*is_compiled = false;
+	guaranteed_column_number = -1;*/
+    //Expression Compilation
+	//if(is_compiled == false){
+		omreval_compile = (omr_eval_compile *)load_external_function(omrjit_path, "omr_compile", true, NULL);
+		slot_deform = (*omreval_compile)();
+		//is_compiled = true;
+	//}
 
-	/*
-	 * Non-error queries loop here.
-	 */
+	/*expr_funcexprstrict_compile = (omr_expr_FUNCEXPR_STRICT_compile *)load_external_function(omrjit_path, "EEOP_FUNCEXPR_STRICT_compile_func", true, NULL);
+	FUNCEXPR_STRICT = (*expr_funcexprstrict_compile)();*/
+
+
+	expr_qual_compile = (omr_expr_qual_compile *)load_external_function(omrjit_path, "EEOP_Qual_compile_func", true, NULL);
+	qual_FunctionType = (*expr_qual_compile)();
+
+	/*expr_var_compile = (omr_EEOP_var_compile *)load_external_function(omrjit_path, "EEOP_VAR_compile_func", true, NULL);
+	VAR_FunctionType = (*expr_var_compile)();*/
+
+	/*expr_ASSIGN_var_compile = (omr_EEOP_ASSIGN_var_compile *)load_external_function(omrjit_path, "EEOP_ASSIGN_VAR_compile_func", true, NULL);
+	ASSIGN_VAR_FunctionType = (*expr_ASSIGN_var_compile)();
+
+	EEOP_NOT_DISTINCT_compile = (omr_EEOP_NOT_DISTINCT_compile *)load_external_function(omrjit_path, "EEOP_NOT_DISTINCT_compile_func", true, NULL);
+	EEOP_NOT_DISTINCT_FUNC = (*EEOP_NOT_DISTINCT_compile)(); //called from 1212
+
+	expr_EEOP_AGGREF_compile = (EEOP_AGGREF_compile *)load_external_function(omrjit_path, "EEOP_AGGREF_compile_func", true, NULL);
+	EEOP_AGGREF_Func = (*expr_EEOP_AGGREF_compile)(); //called from 1498
+
+	expr_EEOP_ASSIGN_TMP_MAKE_RO_compile = (EEOP_ASSIGN_TMP_MAKE_RO_compile *)load_external_function(omrjit_path, "EEOP_ASSIGN_TMP_MAKE_RO_compile_func", true, NULL);
+	EEOP_ASSIGN_TMP_MAKE_RO_Func = (*expr_EEOP_ASSIGN_TMP_MAKE_RO_compile)(); //called from 645*/
+
+	/*expr_float8_pl_compile = (float8_pl_compile *)load_external_function(omrjit_path, "float8_add_func", true, NULL);
+	float8_omr_add_Func = (*expr_float8_pl_compile)();*/
 
 	for (;;)
 	{
@@ -4607,9 +4641,8 @@ PostgresMain(int argc, char *argv[],
 		}
 	}							/* end of input-reading loop */
 	//shutdown OMR
-	//elog(INFO, "Step 5: shutdown JIT\n");
-	/*omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
-	omreval_shut();*/
+	omreval_shut = (omr_eval_shutdown)load_external_function(omrjit_path, "omr_shut", true, NULL);
+	omreval_shut();
 }
 
 /*
