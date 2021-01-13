@@ -77,6 +77,8 @@
 #include "utils/typcache.h"
 #include "utils/xml.h"
 
+#include "jit/omrjit.h"
+
 /*
  * Use computed-goto-based opcode dispatch when computed gotos are available.
  * But use a separate symbol so that it's easy to adjust locally in this file
@@ -417,7 +419,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		&&CASE_EEOP_FIELDSELECT,
 		&&CASE_EEOP_FIELDSTORE_DEFORM,
 		&&CASE_EEOP_FIELDSTORE_FORM,
-		&&CASE_EEOP_SBSREF_SUBSCRIPT,
+		&&CASE_EEOP_SBSREF_SUBSCRIPTS,
 		&&CASE_EEOP_SBSREF_OLD,
 		&&CASE_EEOP_SBSREF_ASSIGN,
 		&&CASE_EEOP_SBSREF_FETCH,
@@ -478,7 +480,8 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, innerslot);
 
-			slot_getsomeattrs(innerslot, op->d.fetch.last_var);
+			//slot_getsomeattrs(innerslot, op->d.fetch.last_var);
+			slot_getsomeattrs_int(innerslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
 		}
@@ -487,7 +490,8 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, outerslot);
 
-			slot_getsomeattrs(outerslot, op->d.fetch.last_var);
+			//slot_getsomeattrs(outerslot, op->d.fetch.last_var);
+			slot_getsomeattrs_int(outerslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
 		}
@@ -496,7 +500,8 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, scanslot);
 
-			slot_getsomeattrs(scanslot, op->d.fetch.last_var);
+			//slot_getsomeattrs(scanslot, op->d.fetch.last_var);
+			slot_getsomeattrs_int(scanslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
 		}
@@ -514,6 +519,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			Assert(attnum >= 0 && attnum < innerslot->tts_nvalid);
 			*op->resvalue = innerslot->tts_values[attnum];
 			*op->resnull = innerslot->tts_isnull[attnum];
+			//(*VAR_FunctionType)(attnum, innerslot->tts_values[attnum], innerslot->tts_isnull[attnum], &op->resnull, &op->resvalue);
 
 			EEO_NEXT();
 		}
@@ -527,6 +533,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			Assert(attnum >= 0 && attnum < outerslot->tts_nvalid);
 			*op->resvalue = outerslot->tts_values[attnum];
 			*op->resnull = outerslot->tts_isnull[attnum];
+			//(*VAR_FunctionType)(attnum, outerslot->tts_values[attnum], outerslot->tts_isnull[attnum], &op->resnull, &op->resvalue);
 
 			EEO_NEXT();
 		}
@@ -535,11 +542,10 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			int			attnum = op->d.var.attnum;
 
-			/* See EEOP_INNER_VAR comments */
-
 			Assert(attnum >= 0 && attnum < scanslot->tts_nvalid);
 			*op->resvalue = scanslot->tts_values[attnum];
 			*op->resnull = scanslot->tts_isnull[attnum];
+			//(*VAR_FunctionType)(attnum, scanslot->tts_values[attnum], scanslot->tts_isnull[attnum], &op->resnull, &op->resvalue);
 
 			EEO_NEXT();
 		}
@@ -582,6 +588,8 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			Assert(attnum >= 0 && attnum < innerslot->tts_nvalid);
 			resultslot->tts_values[resultnum] = innerslot->tts_values[attnum];
 			resultslot->tts_isnull[resultnum] = innerslot->tts_isnull[attnum];
+			//(*ASSIGN_VAR_FunctionType)(&resultslot->tts_values[resultnum], &resultslot->tts_isnull[resultnum], innerslot->tts_values[attnum], innerslot->tts_isnull[attnum]);
+			//(*ASSIGN_VAR_FunctionType)(op->d.assign_var.resultnum, resultslot, innerslot->tts_values[attnum], innerslot->tts_isnull[attnum]);
 
 			EEO_NEXT();
 		}
@@ -598,6 +606,8 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			Assert(attnum >= 0 && attnum < outerslot->tts_nvalid);
 			resultslot->tts_values[resultnum] = outerslot->tts_values[attnum];
 			resultslot->tts_isnull[resultnum] = outerslot->tts_isnull[attnum];
+			//(*ASSIGN_VAR_FunctionType)(&resultslot->tts_values[resultnum], &resultslot->tts_isnull[resultnum], outerslot->tts_values[attnum], outerslot->tts_isnull[attnum]);
+			//(*ASSIGN_VAR_FunctionType)(op->d.assign_var.resultnum, resultslot, outerslot->tts_values[attnum], outerslot->tts_isnull[attnum]);
 
 			EEO_NEXT();
 		}
@@ -614,6 +624,8 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			Assert(attnum >= 0 && attnum < scanslot->tts_nvalid);
 			resultslot->tts_values[resultnum] = scanslot->tts_values[attnum];
 			resultslot->tts_isnull[resultnum] = scanslot->tts_isnull[attnum];
+			//(*ASSIGN_VAR_FunctionType)(&resultslot->tts_values[resultnum], &resultslot->tts_isnull[resultnum], scanslot->tts_values[attnum], scanslot->tts_isnull[attnum]);
+			//(*ASSIGN_VAR_FunctionType)(op->d.assign_var.resultnum, resultslot, scanslot->tts_values[attnum], scanslot->tts_isnull[attnum]);
 
 			EEO_NEXT();
 		}
@@ -632,12 +644,13 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			int			resultnum = op->d.assign_tmp.resultnum;
 
-			resultslot->tts_isnull[resultnum] = state->resnull;
+			/*resultslot->tts_isnull[resultnum] = state->resnull;
 			if (!resultslot->tts_isnull[resultnum])
 				resultslot->tts_values[resultnum] =
 					MakeExpandedObjectReadOnlyInternal(state->resvalue);
 			else
-				resultslot->tts_values[resultnum] = state->resvalue;
+				resultslot->tts_values[resultnum] = state->resvalue;*/
+			EEOP_ASSIGN_TMP_MAKE_RO_Func(resultnum, resultslot, state);
 
 			EEO_NEXT();
 		}
@@ -694,6 +707,10 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 					goto strictfail;
 				}
 			}
+			/*if(FUNCEXPR_STRICT(op->d.func.nargs, fcinfo->args, &op->resnull, &op->resvalue, op->d.func.fn_addr(fcinfo), fcinfo))
+			{
+				EEO_NEXT();
+			}*/
 			fcinfo->isnull = false;
 			d = op->d.func.fn_addr(fcinfo);
 			*op->resvalue = d;
@@ -871,12 +888,16 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			/* simplified version of BOOL_AND_STEP for use by ExecQual() */
 
 			/* If argument (also result) is false or null ... */
-			if (*op->resnull ||
+			/*if (*op->resnull ||
 				!DatumGetBool(*op->resvalue))
 			{
-				/* ... bail out early, returning FALSE */
+				//... bail out early, returning FALSE
 				*op->resnull = false;
 				*op->resvalue = BoolGetDatum(false);
+				EEO_JUMP(op->d.qualexpr.jumpdone);
+			}*/
+			if(qual_FunctionType(&op->resnull, &op->resvalue))
+			{
 				EEO_JUMP(op->d.qualexpr.jumpdone);
 			}
 
@@ -1210,6 +1231,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 				*op->resvalue = eqresult;
 				*op->resnull = fcinfo->isnull;
 			}
+			//EEOP_NOT_DISTINCT_FUNC(&op->resnull, &op->resvalue, op->d.func.fn_addr(fcinfo), fcinfo);
 
 			EEO_NEXT();
 		}
@@ -1396,12 +1418,10 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			EEO_NEXT();
 		}
 
-		EEO_CASE(EEOP_SBSREF_SUBSCRIPT)
+		EEO_CASE(EEOP_SBSREF_SUBSCRIPTS)
 		{
-			/* Process an array subscript */
-
-			/* too complex for an inline implementation */
-			if (ExecEvalSubscriptingRef(state, op))
+			/* Precheck SubscriptingRef subscript(s) */
+			if (op->d.sbsref_subscript.subscriptfunc(state, op, econtext))
 			{
 				EEO_NEXT();
 			}
@@ -1413,37 +1433,11 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		}
 
 		EEO_CASE(EEOP_SBSREF_OLD)
+			EEO_CASE(EEOP_SBSREF_ASSIGN)
+			EEO_CASE(EEOP_SBSREF_FETCH)
 		{
-			/*
-			 * Fetch the old value in an sbsref assignment, in case it's
-			 * referenced (via a CaseTestExpr) inside the assignment
-			 * expression.
-			 */
-
-			/* too complex for an inline implementation */
-			ExecEvalSubscriptingRefOld(state, op);
-
-			EEO_NEXT();
-		}
-
-		/*
-		 * Perform SubscriptingRef assignment
-		 */
-		EEO_CASE(EEOP_SBSREF_ASSIGN)
-		{
-			/* too complex for an inline implementation */
-			ExecEvalSubscriptingRefAssign(state, op);
-
-			EEO_NEXT();
-		}
-
-		/*
-		 * Fetch subset of an array.
-		 */
-		EEO_CASE(EEOP_SBSREF_FETCH)
-		{
-			/* too complex for an inline implementation */
-			ExecEvalSubscriptingRefFetch(state, op);
+			/* Perform a SubscriptingRef fetch or assignment */
+			op->d.sbsref.subscriptfunc(state, op, econtext);
 
 			EEO_NEXT();
 		}
@@ -1494,12 +1488,13 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * Returns a Datum whose value is the precomputed aggregate value
 			 * found in the given expression context.
 			 */
-			AggrefExprState *aggref = op->d.aggref.astate;
+			int			aggno = op->d.aggref.aggno;
 
 			Assert(econtext->ecxt_aggvalues != NULL);
 
-			*op->resvalue = econtext->ecxt_aggvalues[aggref->aggno];
-			*op->resnull = econtext->ecxt_aggnulls[aggref->aggno];
+			*op->resvalue = econtext->ecxt_aggvalues[aggno];
+			*op->resnull = econtext->ecxt_aggnulls[aggno];
+			//EEOP_AGGREF_Func(&op->resnull, &op->resvalue, econtext->ecxt_aggvalues[aggno], econtext->ecxt_aggnulls[aggno]);
 
 			EEO_NEXT();
 		}
@@ -3120,200 +3115,6 @@ ExecEvalFieldStoreForm(ExprState *state, ExprEvalStep *op, ExprContext *econtext
 
 	*op->resvalue = HeapTupleGetDatum(tuple);
 	*op->resnull = false;
-}
-
-/*
- * Process a subscript in a SubscriptingRef expression.
- *
- * If subscript is NULL, throw error in assignment case, or in fetch case
- * set result to NULL and return false (instructing caller to skip the rest
- * of the SubscriptingRef sequence).
- *
- * Subscript expression result is in subscriptvalue/subscriptnull.
- * On success, integer subscript value has been saved in upperindex[] or
- * lowerindex[] for use later.
- */
-bool
-ExecEvalSubscriptingRef(ExprState *state, ExprEvalStep *op)
-{
-	SubscriptingRefState *sbsrefstate = op->d.sbsref_subscript.state;
-	int		   *indexes;
-	int			off;
-
-	/* If any index expr yields NULL, result is NULL or error */
-	if (sbsrefstate->subscriptnull)
-	{
-		if (sbsrefstate->isassignment)
-			ereport(ERROR,
-					(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-					 errmsg("array subscript in assignment must not be null")));
-		*op->resnull = true;
-		return false;
-	}
-
-	/* Convert datum to int, save in appropriate place */
-	if (op->d.sbsref_subscript.isupper)
-		indexes = sbsrefstate->upperindex;
-	else
-		indexes = sbsrefstate->lowerindex;
-	off = op->d.sbsref_subscript.off;
-
-	indexes[off] = DatumGetInt32(sbsrefstate->subscriptvalue);
-
-	return true;
-}
-
-/*
- * Evaluate SubscriptingRef fetch.
- *
- * Source container is in step's result variable.
- */
-void
-ExecEvalSubscriptingRefFetch(ExprState *state, ExprEvalStep *op)
-{
-	SubscriptingRefState *sbsrefstate = op->d.sbsref.state;
-
-	/* Should not get here if source container (or any subscript) is null */
-	Assert(!(*op->resnull));
-
-	if (sbsrefstate->numlower == 0)
-	{
-		/* Scalar case */
-		*op->resvalue = array_get_element(*op->resvalue,
-										  sbsrefstate->numupper,
-										  sbsrefstate->upperindex,
-										  sbsrefstate->refattrlength,
-										  sbsrefstate->refelemlength,
-										  sbsrefstate->refelembyval,
-										  sbsrefstate->refelemalign,
-										  op->resnull);
-	}
-	else
-	{
-		/* Slice case */
-		*op->resvalue = array_get_slice(*op->resvalue,
-										sbsrefstate->numupper,
-										sbsrefstate->upperindex,
-										sbsrefstate->lowerindex,
-										sbsrefstate->upperprovided,
-										sbsrefstate->lowerprovided,
-										sbsrefstate->refattrlength,
-										sbsrefstate->refelemlength,
-										sbsrefstate->refelembyval,
-										sbsrefstate->refelemalign);
-	}
-}
-
-/*
- * Compute old container element/slice value for a SubscriptingRef assignment
- * expression. Will only be generated if the new-value subexpression
- * contains SubscriptingRef or FieldStore. The value is stored into the
- * SubscriptingRefState's prevvalue/prevnull fields.
- */
-void
-ExecEvalSubscriptingRefOld(ExprState *state, ExprEvalStep *op)
-{
-	SubscriptingRefState *sbsrefstate = op->d.sbsref.state;
-
-	if (*op->resnull)
-	{
-		/* whole array is null, so any element or slice is too */
-		sbsrefstate->prevvalue = (Datum) 0;
-		sbsrefstate->prevnull = true;
-	}
-	else if (sbsrefstate->numlower == 0)
-	{
-		/* Scalar case */
-		sbsrefstate->prevvalue = array_get_element(*op->resvalue,
-												   sbsrefstate->numupper,
-												   sbsrefstate->upperindex,
-												   sbsrefstate->refattrlength,
-												   sbsrefstate->refelemlength,
-												   sbsrefstate->refelembyval,
-												   sbsrefstate->refelemalign,
-												   &sbsrefstate->prevnull);
-	}
-	else
-	{
-		/* Slice case */
-		/* this is currently unreachable */
-		sbsrefstate->prevvalue = array_get_slice(*op->resvalue,
-												 sbsrefstate->numupper,
-												 sbsrefstate->upperindex,
-												 sbsrefstate->lowerindex,
-												 sbsrefstate->upperprovided,
-												 sbsrefstate->lowerprovided,
-												 sbsrefstate->refattrlength,
-												 sbsrefstate->refelemlength,
-												 sbsrefstate->refelembyval,
-												 sbsrefstate->refelemalign);
-		sbsrefstate->prevnull = false;
-	}
-}
-
-/*
- * Evaluate SubscriptingRef assignment.
- *
- * Input container (possibly null) is in result area, replacement value is in
- * SubscriptingRefState's replacevalue/replacenull.
- */
-void
-ExecEvalSubscriptingRefAssign(ExprState *state, ExprEvalStep *op)
-{
-	SubscriptingRefState *sbsrefstate = op->d.sbsref_subscript.state;
-
-	/*
-	 * For an assignment to a fixed-length container type, both the original
-	 * container and the value to be assigned into it must be non-NULL, else
-	 * we punt and return the original container.
-	 */
-	if (sbsrefstate->refattrlength > 0)
-	{
-		if (*op->resnull || sbsrefstate->replacenull)
-			return;
-	}
-
-	/*
-	 * For assignment to varlena arrays, we handle a NULL original array by
-	 * substituting an empty (zero-dimensional) array; insertion of the new
-	 * element will result in a singleton array value.  It does not matter
-	 * whether the new element is NULL.
-	 */
-	if (*op->resnull)
-	{
-		*op->resvalue = PointerGetDatum(construct_empty_array(sbsrefstate->refelemtype));
-		*op->resnull = false;
-	}
-
-	if (sbsrefstate->numlower == 0)
-	{
-		/* Scalar case */
-		*op->resvalue = array_set_element(*op->resvalue,
-										  sbsrefstate->numupper,
-										  sbsrefstate->upperindex,
-										  sbsrefstate->replacevalue,
-										  sbsrefstate->replacenull,
-										  sbsrefstate->refattrlength,
-										  sbsrefstate->refelemlength,
-										  sbsrefstate->refelembyval,
-										  sbsrefstate->refelemalign);
-	}
-	else
-	{
-		/* Slice case */
-		*op->resvalue = array_set_slice(*op->resvalue,
-										sbsrefstate->numupper,
-										sbsrefstate->upperindex,
-										sbsrefstate->lowerindex,
-										sbsrefstate->upperprovided,
-										sbsrefstate->lowerprovided,
-										sbsrefstate->replacevalue,
-										sbsrefstate->replacenull,
-										sbsrefstate->refattrlength,
-										sbsrefstate->refelemlength,
-										sbsrefstate->refelembyval,
-										sbsrefstate->refelemalign);
-	}
 }
 
 /*
